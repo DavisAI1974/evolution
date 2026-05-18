@@ -1,0 +1,11 @@
+# Nova function definition example.
+
+fn announce(stage) {
+    print("evolving: " + stage)
+}
+
+let stages = ["observe", "propose", "verify"]
+
+for stage in stages {
+    announce(stage)
+}

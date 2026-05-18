@@ -61,6 +61,19 @@ print(stdlib.lower(stdlib.trim(raw)))
 
         self.assertEqual(output.strip(), "nova")
 
+    def test_nova_defined_function(self):
+        output = self.run_script(
+            """
+fn announce(name) {
+    print("hello " + name)
+}
+
+announce("evolution")
+"""
+        )
+
+        self.assertEqual(output.strip(), "hello evolution")
+
 
 if __name__ == "__main__":
     unittest.main()

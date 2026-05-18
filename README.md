@@ -24,6 +24,7 @@ python -m unittest discover -s tests
 - `nova_mcp_optimizer.py`: consolidated tool execution experiments.
 - `evolution.py`: the first self-evolution CLI and guardrail loop.
 - `examples/evolution_loop.nv`: Nova script describing the language's own loop.
+- `examples/functions.nv`: first self-hosting language feature example.
 - `tests/`: regression tests that protect the interpreter before syntax changes.
 - `memory/evolution_memory.jsonl`: append-only learning log created by cycles.
 - `project.evolution.json`: project identity, gates, and promotion policy.
@@ -55,3 +56,15 @@ already included:
 
 Evolution can suggest changes to itself, but promotion requires evidence. A change
 must attach a verification result before it can move from proposal to candidate.
+
+## Language Notes
+
+Nova now supports lightweight user-defined functions:
+
+```nova
+fn announce(stage) {
+    print("evolving: " + stage)
+}
+
+announce("verify")
+```

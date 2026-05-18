@@ -383,6 +383,19 @@ class NovaInterpreter:
                 i = j
                 continue
 
+            # fn name(arg, other) { ... }
+            if line.startswith("fn ") or line.startswith("func "):
+                keyword, rest = line.split(" ", 1)
+                m = re.match(r"^([A-Za-z_]\w*)\s*\((.*?)\)\s*\{?\s*$", rest.strip())
+                if not m:
+                    raise RuntimeError(f"[Nova Error] Invalid {keyword} syntax: {line}")
+                name = m.group(1)
+                arg_names = [arg.strip() for arg in m.group(2).split(",") if arg.strip()]
+                block, j = self._collect_block(lines, i + 1)
+                self.funcs[name] = (arg_names, block)
+                i = j
+                continue
+
             # Function call (identifier followed by '(') — multiline args supported
             m = re.match(r"^([A-Za-z_]\w*)\s*\(", line)
             if m:
