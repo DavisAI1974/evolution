@@ -1,9 +1,9 @@
-{"request": "Add return values to Nova functions", "status": "open", "ts": "2026-05-18T09:03:05.809820+00:00"}
-{"request": "Create a local operator_console.py prompt loop that writes human requests into requests/evolution_requests.jsonl.", "status": "open", "ts": "2026-05-18T09:14:32.956750+00:00"}
-{"request": "Add return values to Nova functions with tests and an example script.", "status": "open", "ts": "2026-05-18T09:14:32.991779+00:00"}
-{"request": "Add a GitHub workflow that runs Nova interpreter examples and unittest discovery on every push.", "status": "open", "ts": "2026-05-18T09:14:33.121306+00:00"}
-{"request": "Teach evolution.py to convert open requests into proposal records, then mark them proposed after a verified cycle.", "status": "open", "ts": "2026-05-18T09:14:33.192991+00:00"}
-{"request": "Add memory summarization that reads evolution_memory.jsonl and produces a concise CURRENT_STATE.md.", "status": "open", "ts": "2026-05-18T09:14:43.570320+00:00"}
-{"request": "Expose evolution status as JSON so the markets-watch /evolve dashboard can display live requests, proposals, gates, and verification results.", "status": "open", "ts": "2026-05-18T09:14:43.600611+00:00"}
-{"request": "Design a Nova migration format so future syntax changes can ship with automatic rewrites and rollback notes.", "status": "open", "ts": "2026-05-18T09:14:43.634197+00:00"}
-{"request": "Add parser tests for else blocks before implementing if/else syntax in Nova.", "status": "open", "ts": "2026-05-18T09:14:43.796285+00:00"}
+{"id": "REQ-0001", "proposal_id": "PROP-0001", "request": "Add return values to Nova functions", "status": "proposed", "ts": "2026-05-18T09:03:05.809820+00:00"}
+{"id": "REQ-0002", "proposal_id": "PROP-0002", "request": "Create a local operator_console.py prompt loop that writes human requests into requests/evolution_requests.jsonl.", "status": "proposed", "ts": "2026-05-18T09:14:32.956750+00:00"}
+{"id": "REQ-0003", "proposal_id": "PROP-0003", "request": "Add return values to Nova functions with tests and an example script.", "status": "proposed", "ts": "2026-05-18T09:14:32.991779+00:00"}
+{"id": "REQ-0004", "proposal_id": "PROP-0004", "request": "Add a GitHub workflow that runs Nova interpreter examples and unittest discovery on every push.", "status": "proposed", "ts": "2026-05-18T09:14:33.121306+00:00"}
+{"id": "REQ-0005", "proposal_id": "PROP-0005", "request": "Teach evolution.py to convert open requests into proposal records, then mark them proposed after a verified cycle.", "status": "proposed", "ts": "2026-05-18T09:14:33.192991+00:00"}
+{"id": "REQ-0006", "proposal_id": "PROP-0006", "request": "Add memory summarization that reads evolution_memory.jsonl and produces a concise CURRENT_STATE.md.", "status": "proposed", "ts": "2026-05-18T09:14:43.570320+00:00"}
+{"id": "REQ-0007", "proposal_id": "PROP-0007", "request": "Expose evolution status as JSON so the markets-watch /evolve dashboard can display live requests, proposals, gates, and verification results.", "status": "proposed", "ts": "2026-05-18T09:14:43.600611+00:00"}
+{"id": "REQ-0008", "proposal_id": "PROP-0008", "request": "Design a Nova migration format so future syntax changes can ship with automatic rewrites and rollback notes.", "status": "proposed", "ts": "2026-05-18T09:14:43.634197+00:00"}
+{"id": "REQ-0009", "proposal_id": "PROP-0009", "request": "Add parser tests for else blocks before implementing if/else syntax in Nova.", "status": "proposed", "ts": "2026-05-18T09:14:43.796285+00:00"}

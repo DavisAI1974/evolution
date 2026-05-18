@@ -25,6 +25,8 @@ MEMORY_DIR = ROOT / "memory"
 MEMORY_LOG = MEMORY_DIR / "evolution_memory.jsonl"
 REQUESTS_DIR = ROOT / "requests"
 REQUESTS_LOG = REQUESTS_DIR / "evolution_requests.jsonl"
+PROPOSALS_DIR = ROOT / "proposals"
+PROPOSALS_LOG = PROPOSALS_DIR / "evolution_proposals.jsonl"
 
 
 @dataclass
@@ -135,6 +137,7 @@ def append_memory(event: dict[str, Any]) -> None:
 def append_request(text: str) -> dict[str, Any]:
     REQUESTS_DIR.mkdir(exist_ok=True)
     event = {
+        "id": next_id("REQ", read_jsonl(REQUESTS_LOG)),
         "ts": datetime.now(timezone.utc).isoformat(),
         "status": "open",
         "request": text.strip(),
@@ -145,23 +148,122 @@ def append_request(text: str) -> dict[str, Any]:
 
 
 def read_requests() -> list[dict[str, Any]]:
-    if not REQUESTS_LOG.exists():
-        return []
-    requests: list[dict[str, Any]] = []
-    for line in REQUESTS_LOG.read_text(encoding="utf-8").splitlines():
-        if line.strip():
-            requests.append(json.loads(line))
+    requests = read_jsonl(REQUESTS_LOG)
+    changed = False
+    next_number = 1
+    for request in requests:
+        if not request.get("id"):
+            while any(item.get("id") == f"REQ-{next_number:04d}" for item in requests):
+                next_number += 1
+            request["id"] = f"REQ-{next_number:04d}"
+            changed = True
+            next_number += 1
+    if changed:
+        write_jsonl(REQUESTS_LOG, requests)
     return requests
+
+
+def read_jsonl(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    records: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            records.append(json.loads(line))
+    return records
+
+
+def write_jsonl(path: Path, records: list[dict[str, Any]]) -> None:
+    path.parent.mkdir(exist_ok=True)
+    with path.open("w", encoding="utf-8") as handle:
+        for record in records:
+            handle.write(json.dumps(record, sort_keys=True) + "\n")
+
+
+def next_id(prefix: str, records: list[dict[str, Any]]) -> str:
+    numbers: list[int] = []
+    for record in records:
+        raw = str(record.get("id", ""))
+        if raw.startswith(f"{prefix}-"):
+            try:
+                numbers.append(int(raw.split("-", 1)[1]))
+            except ValueError:
+                pass
+    return f"{prefix}-{(max(numbers) if numbers else 0) + 1:04d}"
+
+
+def request_to_proposal(request: dict[str, Any], existing: list[dict[str, Any]]) -> dict[str, Any]:
+    text = request["request"]
+    lowered = text.lower()
+    risk = "medium" if any(term in lowered for term in ["interpreter", "syntax", "parser", "migration"]) else "low"
+    if "github workflow" in lowered or "push" in lowered:
+        target = ".github/workflows/"
+        gate = "GitHub Actions must pass"
+    elif "console" in lowered or "prompt" in lowered:
+        target = "operator_console.py"
+        gate = "manual terminal smoke test"
+    elif "dashboard" in lowered or "status as json" in lowered:
+        target = "evolution.py"
+        gate = "python evolution.py status-json"
+    elif "memory" in lowered:
+        target = "CURRENT_STATE.md"
+        gate = "summary generated from append-only memory"
+    elif "return values" in lowered or "else" in lowered or "syntax" in lowered:
+        target = "nova_interpreter.py"
+        gate = "parser tests and example script must pass"
+    else:
+        target = "project"
+        gate = "python evolution.py verify"
+    return {
+        "id": next_id("PROP", existing),
+        "request_id": request.get("id", "legacy"),
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "status": "proposed",
+        "title": text.rstrip("."),
+        "target": target,
+        "risk": risk,
+        "gate": gate,
+    }
+
+
+def promote_requests() -> dict[str, Any]:
+    requests = read_requests()
+    proposals = read_jsonl(PROPOSALS_LOG)
+    promoted_ids = {proposal.get("request_id") for proposal in proposals}
+    changed = False
+    new_proposals: list[dict[str, Any]] = []
+    for request in requests:
+        request_id = request.get("id")
+        if request.get("status") == "open" and request_id not in promoted_ids:
+            proposal = request_to_proposal(request, proposals + new_proposals)
+            new_proposals.append(proposal)
+            request["status"] = "proposed"
+            request["proposal_id"] = proposal["id"]
+            changed = True
+    if changed:
+        write_jsonl(REQUESTS_LOG, requests)
+        write_jsonl(PROPOSALS_LOG, proposals + new_proposals)
+    return {
+        "promoted": len(new_proposals),
+        "proposals": new_proposals,
+    }
+
+
+def read_proposals() -> list[dict[str, Any]]:
+    return read_jsonl(PROPOSALS_LOG)
 
 
 def run_cycle() -> dict[str, Any]:
     obs = observe()
+    promoted = promote_requests()
     proposals = propose(obs)
     verification = verify()
     event = {
         "ts": datetime.now(timezone.utc).isoformat(),
         "observation": asdict(obs),
+        "request_promotions": promoted,
         "proposals": [asdict(item) for item in proposals],
+        "proposal_log_count": len(read_proposals()),
         "verification": verification,
         "passed": all(item["ok"] for item in verification),
     }
@@ -175,19 +277,52 @@ def print_json(data: Any) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Evolution project CLI")
-    parser.add_argument("command", choices=["status", "observe", "propose", "verify", "cycle", "ask", "requests"])
+    parser.add_argument(
+        "command",
+        choices=[
+            "status",
+            "status-json",
+            "observe",
+            "propose",
+            "promote",
+            "proposals",
+            "verify",
+            "cycle",
+            "ask",
+            "requests",
+        ],
+    )
     parser.add_argument("text", nargs="*", help="Request text for the ask command")
     args = parser.parse_args()
 
     if args.command == "status":
         manifest = load_manifest()
-        print_json({"manifest": manifest, "observation": asdict(observe())})
+        print_json({
+            "manifest": manifest,
+            "observation": asdict(observe()),
+            "requests": read_requests(),
+            "proposals": read_proposals(),
+        })
+        return 0
+    if args.command == "status-json":
+        print_json({
+            "observation": asdict(observe()),
+            "requests": read_requests(),
+            "proposals": read_proposals(),
+            "memory_events": len(read_jsonl(MEMORY_LOG)),
+        })
         return 0
     if args.command == "observe":
         print_json(asdict(observe()))
         return 0
     if args.command == "propose":
         print_json([asdict(item) for item in propose(observe())])
+        return 0
+    if args.command == "promote":
+        print_json(promote_requests())
+        return 0
+    if args.command == "proposals":
+        print_json(read_proposals())
         return 0
     if args.command == "verify":
         results = verify()
