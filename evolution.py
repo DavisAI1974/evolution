@@ -253,6 +253,196 @@ def read_proposals() -> list[dict[str, Any]]:
     return read_jsonl(PROPOSALS_LOG)
 
 
+def save_proposals(proposals: list[dict[str, Any]]) -> None:
+    write_jsonl(PROPOSALS_LOG, proposals)
+
+
+def update_proposal_status(
+    proposal_id: str,
+    status: str,
+    note: str,
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    proposals = read_proposals()
+    updated: dict[str, Any] | None = None
+    for proposal in proposals:
+        if proposal.get("id") == proposal_id:
+            proposal["status"] = status
+            proposal["updated_ts"] = datetime.now(timezone.utc).isoformat()
+            proposal["note"] = note
+            if extra:
+                proposal.update(extra)
+            updated = proposal
+            break
+    if updated is None:
+        raise RuntimeError(f"Unknown proposal id: {proposal_id}")
+    save_proposals(proposals)
+    return updated
+
+
+def mark_request_status(request_id: str, status: str) -> None:
+    requests = read_requests()
+    changed = False
+    for request in requests:
+        if request.get("id") == request_id:
+            request["status"] = status
+            request["updated_ts"] = datetime.now(timezone.utc).isoformat()
+            changed = True
+            break
+    if changed:
+        write_jsonl(REQUESTS_LOG, requests)
+
+
+def protected_targets() -> set[str]:
+    manifest = load_manifest()
+    return set(manifest.get("gates", {}).get("blocked_auto_targets", []))
+
+
+def append_current_state() -> Path:
+    memory_events = read_jsonl(MEMORY_LOG)
+    proposals = read_proposals()
+    requests = read_requests()
+    lines = [
+        "# Evolution Current State",
+        "",
+        f"Generated: {datetime.now(timezone.utc).isoformat()}",
+        "",
+        "## Counts",
+        "",
+        f"- Requests: {len(requests)}",
+        f"- Proposals: {len(proposals)}",
+        f"- Memory events: {len(memory_events)}",
+        "",
+        "## Open Proposals",
+        "",
+    ]
+    for proposal in proposals:
+        if proposal.get("status") not in {"done", "verified"}:
+            lines.append(
+                f"- {proposal.get('id')} [{proposal.get('status')}] "
+                f"{proposal.get('title')} -> {proposal.get('target')}"
+            )
+    lines.extend(["", "## Latest Memory", ""])
+    for event in memory_events[-3:]:
+        lines.append(
+            f"- {event.get('ts')}: passed={event.get('passed')} "
+            f"proposal_log_count={event.get('proposal_log_count', 'n/a')}"
+        )
+    path = ROOT / "CURRENT_STATE.md"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def can_satisfy_existing_artifact(proposal: dict[str, Any]) -> tuple[bool, str]:
+    title = proposal.get("title", "").lower()
+    target = proposal.get("target", "")
+    if target == "operator_console.py" and (ROOT / "operator_console.py").exists():
+        return True, "operator console exists and was smoke-tested"
+    if target == ".github/workflows/" and (ROOT / ".github" / "workflows" / "verify.yml").exists():
+        return True, "GitHub verification workflow exists"
+    if "convert open requests into proposal" in title and "promote" in command_choices():
+        return True, "promote command exists and proposals were generated"
+    if target == "evolution.py" and "status-json" in command_choices():
+        return True, "status-json command exists"
+    return False, ""
+
+
+def command_choices() -> set[str]:
+    return {
+        "status",
+        "status-json",
+        "observe",
+        "propose",
+        "promote",
+        "proposals",
+        "verify",
+        "cycle",
+        "ask",
+        "requests",
+        "work",
+        "work-next",
+    }
+
+
+def work_next(allow_protected: bool = False) -> dict[str, Any]:
+    promote_requests()
+    proposals = read_proposals()
+    blocked = protected_targets()
+    for proposal in proposals:
+        if proposal.get("status") != "proposed" and not (
+            allow_protected and proposal.get("status") == "needs_approval"
+        ):
+            continue
+        proposal_id = proposal["id"]
+        request_id = proposal.get("request_id", "")
+        target = proposal.get("target", "")
+        if target in blocked and not allow_protected:
+            updated = update_proposal_status(
+                proposal_id,
+                "needs_approval",
+                f"Protected target {target}; rerun with --allow-protected after human approval.",
+            )
+            mark_request_status(request_id, "needs_approval")
+            event = {
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "action": "work",
+                "worked": False,
+                "proposal": updated,
+            }
+            append_memory(event)
+            return event
+
+        satisfied, note = can_satisfy_existing_artifact(proposal)
+        if not satisfied and target == "CURRENT_STATE.md":
+            path = append_current_state()
+            satisfied = True
+            note = f"generated {path.name} from memory and proposal logs"
+
+        if not satisfied:
+            updated = update_proposal_status(
+                proposal_id,
+                "needs_implementation",
+                "No automatic worker is available for this proposal yet.",
+            )
+            mark_request_status(request_id, "needs_implementation")
+            event = {
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "action": "work",
+                "worked": False,
+                "proposal": updated,
+            }
+            append_memory(event)
+            return event
+
+        verification = verify()
+        passed = all(item["ok"] for item in verification)
+        status = "done" if passed else "verification_failed"
+        updated = update_proposal_status(
+            proposal_id,
+            status,
+            note,
+            {"verification_passed": passed},
+        )
+        mark_request_status(request_id, status)
+        event = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "action": "work",
+            "worked": passed,
+            "proposal": updated,
+            "verification": verification,
+        }
+        append_memory(event)
+        return event
+    event = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "action": "work",
+        "worked": False,
+        "note": "No proposed work items are available.",
+    }
+    append_memory(event)
+    return event
+
+
 def run_cycle() -> dict[str, Any]:
     obs = observe()
     promoted = promote_requests()
@@ -290,9 +480,12 @@ def main() -> int:
             "cycle",
             "ask",
             "requests",
+            "work",
+            "work-next",
         ],
     )
     parser.add_argument("text", nargs="*", help="Request text for the ask command")
+    parser.add_argument("--allow-protected", action="store_true", help="Allow work on protected targets")
     args = parser.parse_args()
 
     if args.command == "status":
@@ -342,6 +535,10 @@ def main() -> int:
     if args.command == "requests":
         print_json(read_requests())
         return 0
+    if args.command in {"work", "work-next"}:
+        event = work_next(allow_protected=args.allow_protected)
+        print_json(event)
+        return 0 if event.get("worked") or event.get("proposal", {}).get("status") == "needs_approval" else 1
     return 1
 
 

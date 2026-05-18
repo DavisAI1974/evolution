@@ -47,7 +47,24 @@ python evolution.py verify
 
 The same gate runs in GitHub Actions on every push and pull request.
 
-## 4. Cycle
+## 4. Work
+
+Let Evolution pick the next actionable proposal:
+
+```powershell
+python evolution.py work
+```
+
+Protected files such as `nova_interpreter.py` require explicit approval:
+
+```powershell
+python evolution.py work --allow-protected
+```
+
+The first worker version can complete existing safe artifacts, generate
+`CURRENT_STATE.md`, and mark protected proposals as `needs_approval`.
+
+## 5. Cycle
 
 Run a full observe, promote, verify, learn cycle:
 
@@ -61,7 +78,7 @@ Cycle results are appended to:
 memory/evolution_memory.jsonl
 ```
 
-## 5. Implement
+## 6. Implement
 
 Pick one proposal, make a small scoped change, add tests or examples, run
 verification, then commit and push.
@@ -69,7 +86,7 @@ verification, then commit and push.
 Protected targets such as `nova_interpreter.py` need regression tests before
 syntax behavior changes.
 
-## 6. Dashboard
+## 7. Dashboard
 
 The local app or another UI can read machine-friendly status with:
 

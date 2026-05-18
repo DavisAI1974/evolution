@@ -17,6 +17,7 @@ python evolution.py ask "Add return values to Nova functions"
 python evolution.py requests
 python evolution.py promote
 python evolution.py proposals
+python evolution.py work
 python evolution.py cycle
 python operator_console.py
 python -m unittest discover -s tests
@@ -36,6 +37,12 @@ python -m unittest discover -s tests
 - `proposals/evolution_proposals.jsonl`: promoted request records with risk, target, and gate.
 - `operator_console.py`: local prompt loop for human operator input.
 - `EVOLUTION_WORKFLOW.md`: step-by-step request to proposal to verification workflow.
+
+## Work Command
+
+Use `python evolution.py work` to let Evolution pick the next actionable proposal.
+Protected files such as `nova_interpreter.py` are marked `needs_approval` unless
+you deliberately rerun with `--allow-protected`.
 - `project.evolution.json`: project identity, gates, and promotion policy.
 
 ## Current Evolution Loop
