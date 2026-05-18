@@ -23,6 +23,8 @@ ROOT = Path(__file__).resolve().parent
 MANIFEST = ROOT / "project.evolution.json"
 MEMORY_DIR = ROOT / "memory"
 MEMORY_LOG = MEMORY_DIR / "evolution_memory.jsonl"
+REQUESTS_DIR = ROOT / "requests"
+REQUESTS_LOG = REQUESTS_DIR / "evolution_requests.jsonl"
 
 
 @dataclass
@@ -130,6 +132,28 @@ def append_memory(event: dict[str, Any]) -> None:
         handle.write(json.dumps(event, sort_keys=True) + "\n")
 
 
+def append_request(text: str) -> dict[str, Any]:
+    REQUESTS_DIR.mkdir(exist_ok=True)
+    event = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "status": "open",
+        "request": text.strip(),
+    }
+    with REQUESTS_LOG.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event, sort_keys=True) + "\n")
+    return event
+
+
+def read_requests() -> list[dict[str, Any]]:
+    if not REQUESTS_LOG.exists():
+        return []
+    requests: list[dict[str, Any]] = []
+    for line in REQUESTS_LOG.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            requests.append(json.loads(line))
+    return requests
+
+
 def run_cycle() -> dict[str, Any]:
     obs = observe()
     proposals = propose(obs)
@@ -151,7 +175,8 @@ def print_json(data: Any) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Evolution project CLI")
-    parser.add_argument("command", choices=["status", "observe", "propose", "verify", "cycle"])
+    parser.add_argument("command", choices=["status", "observe", "propose", "verify", "cycle", "ask", "requests"])
+    parser.add_argument("text", nargs="*", help="Request text for the ask command")
     args = parser.parse_args()
 
     if args.command == "status":
@@ -172,6 +197,16 @@ def main() -> int:
         event = run_cycle()
         print_json(event)
         return 0 if event["passed"] else 1
+    if args.command == "ask":
+        text = " ".join(args.text).strip()
+        if not text:
+            print("Usage: python evolution.py ask \"your evolution request\"")
+            return 2
+        print_json(append_request(text))
+        return 0
+    if args.command == "requests":
+        print_json(read_requests())
+        return 0
     return 1
 
 

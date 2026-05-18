@@ -13,6 +13,8 @@ docs, memory, and evolution automation all live here.
 cd E:\evolution
 python nova_interpreter.py homelift_nova_example.nv
 python evolution.py status
+python evolution.py ask "Add return values to Nova functions"
+python evolution.py requests
 python evolution.py cycle
 python -m unittest discover -s tests
 ```
@@ -27,6 +29,7 @@ python -m unittest discover -s tests
 - `examples/functions.nv`: first self-hosting language feature example.
 - `tests/`: regression tests that protect the interpreter before syntax changes.
 - `memory/evolution_memory.jsonl`: append-only learning log created by cycles.
+- `requests/evolution_requests.jsonl`: append-only human operator requests.
 - `project.evolution.json`: project identity, gates, and promotion policy.
 
 ## Current Evolution Loop
