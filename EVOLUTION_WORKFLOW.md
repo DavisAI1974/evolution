@@ -37,7 +37,22 @@ Proposals are stored in:
 proposals/evolution_proposals.jsonl
 ```
 
-## 3. Verify
+## 3. Discover
+
+Let Evolution inspect itself and create new proposals from local signals:
+
+```powershell
+python evolution.py discover
+```
+
+Discovery reads requests, proposals, memory, examples, tests, docs, and protected
+target policy. It writes discoveries to:
+
+```text
+discovery/evolution_discoveries.jsonl
+```
+
+## 4. Verify
 
 Before any code change is considered safe, run:
 
@@ -47,7 +62,7 @@ python evolution.py verify
 
 The same gate runs in GitHub Actions on every push and pull request.
 
-## 4. Work
+## 5. Work
 
 Let Evolution pick the next actionable proposal:
 
@@ -64,7 +79,7 @@ python evolution.py work --allow-protected
 The first worker version can complete existing safe artifacts, generate
 `CURRENT_STATE.md`, and mark protected proposals as `needs_approval`.
 
-## 5. Cycle
+## 6. Cycle
 
 Run a full observe, promote, verify, learn cycle:
 
@@ -78,7 +93,7 @@ Cycle results are appended to:
 memory/evolution_memory.jsonl
 ```
 
-## 6. Implement
+## 7. Implement
 
 Pick one proposal, make a small scoped change, add tests or examples, run
 verification, then commit and push.
@@ -86,7 +101,7 @@ verification, then commit and push.
 Protected targets such as `nova_interpreter.py` need regression tests before
 syntax behavior changes.
 
-## 7. Dashboard
+## 8. Dashboard
 
 The local app or another UI can read machine-friendly status with:
 

@@ -27,6 +27,8 @@ REQUESTS_DIR = ROOT / "requests"
 REQUESTS_LOG = REQUESTS_DIR / "evolution_requests.jsonl"
 PROPOSALS_DIR = ROOT / "proposals"
 PROPOSALS_LOG = PROPOSALS_DIR / "evolution_proposals.jsonl"
+DISCOVERY_DIR = ROOT / "discovery"
+DISCOVERY_LOG = DISCOVERY_DIR / "evolution_discoveries.jsonl"
 
 
 @dataclass
@@ -226,6 +228,29 @@ def request_to_proposal(request: dict[str, Any], existing: list[dict[str, Any]])
     }
 
 
+def new_proposal(
+    title: str,
+    target: str,
+    risk: str,
+    gate: str,
+    reason: str,
+    source: str,
+    existing: list[dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        "id": next_id("PROP", existing),
+        "request_id": source,
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "status": "proposed",
+        "title": title.rstrip("."),
+        "target": target,
+        "risk": risk,
+        "gate": gate,
+        "reason": reason,
+        "source": source,
+    }
+
+
 def promote_requests() -> dict[str, Any]:
     requests = read_requests()
     proposals = read_jsonl(PROPOSALS_LOG)
@@ -298,6 +323,135 @@ def protected_targets() -> set[str]:
     return set(manifest.get("gates", {}).get("blocked_auto_targets", []))
 
 
+def append_discovery(event: dict[str, Any]) -> None:
+    DISCOVERY_DIR.mkdir(exist_ok=True)
+    with DISCOVERY_LOG.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(event, sort_keys=True) + "\n")
+
+
+def proposal_exists(title: str, proposals: list[dict[str, Any]]) -> bool:
+    normalized = title.strip().rstrip(".").lower()
+    return any(str(item.get("title", "")).strip().rstrip(".").lower() == normalized for item in proposals)
+
+
+def discover_candidates() -> dict[str, Any]:
+    requests = read_requests()
+    proposals = read_proposals()
+    memory_events = read_jsonl(MEMORY_LOG)
+    observations = asdict(observe())
+    blocked = protected_targets()
+    created: list[dict[str, Any]] = []
+    signals: list[str] = []
+
+    def add(title: str, target: str, risk: str, gate: str, reason: str) -> None:
+        if proposal_exists(title, proposals + created):
+            return
+        created.append(
+            new_proposal(
+                title=title,
+                target=target,
+                risk=risk,
+                gate=gate,
+                reason=reason,
+                source="DISCOVERY",
+                existing=proposals + created,
+            )
+        )
+
+    approval_blocked = [item for item in proposals if item.get("status") == "needs_approval"]
+    protected_blocked = [item for item in approval_blocked if item.get("target") in blocked]
+    language_blocked = [item for item in protected_blocked if item.get("target") == "nova_interpreter.py"]
+    done = [item for item in proposals if item.get("status") == "done"]
+    open_requests = [item for item in requests if item.get("status") == "open"]
+
+    if protected_blocked:
+        signals.append(f"{len(protected_blocked)} protected proposals are waiting on approval")
+        add(
+            title="Create an explicit approval ledger for protected Evolution work",
+            target="approvals/evolution_approvals.jsonl",
+            risk="low",
+            gate="approval record must reference proposal id and protected target",
+            reason="Protected proposals should not depend on chat history; approvals need a durable local audit trail.",
+        )
+
+    if len(language_blocked) >= 2:
+        signals.append(f"{len(language_blocked)} language proposals are blocked on nova_interpreter.py")
+        add(
+            title="Create a language change readiness checklist",
+            target="LANGUAGE_CHANGE_CHECKLIST.md",
+            risk="low",
+            gate="checklist must require tests, examples, migration notes, and rollback notes",
+            reason="Multiple protected language changes are queued; Evolution needs a standard readiness gate before interpreter edits.",
+        )
+
+    if observations["nova_files"] < 5:
+        signals.append("Nova has fewer than five executable examples")
+        add(
+            title="Add executable Nova examples for return values, branching, and migrations",
+            target="examples/",
+            risk="low",
+            gate="all examples must run through nova_interpreter.py",
+            reason="A language evolves safely when new syntax has executable examples before runtime changes.",
+        )
+
+    if observations["python_files"] > 0 and observations["docs"] < observations["python_files"]:
+        signals.append("Documentation count is lower than Python source count")
+        add(
+            title="Document the Evolution CLI command contract",
+            target="CLI_REFERENCE.md",
+            risk="low",
+            gate="document every evolution.py command with an example",
+            reason="The operator and future agents need a stable command contract to use Evolution correctly.",
+        )
+
+    if done and not (ROOT / "CHANGELOG.md").exists():
+        signals.append("Completed proposals exist but no changelog exists")
+        add(
+            title="Create CHANGELOG.md from completed proposal records",
+            target="CHANGELOG.md",
+            risk="low",
+            gate="changelog entries must reference proposal ids",
+            reason="Completed work should be visible outside JSONL logs for human review and patent/invention tracking.",
+        )
+
+    if len(memory_events) >= 5 and not (ROOT / "CURRENT_STATE.md").exists():
+        signals.append("Memory has enough events to summarize but CURRENT_STATE.md is missing")
+        add(
+            title="Generate CURRENT_STATE.md during each cycle",
+            target="CURRENT_STATE.md",
+            risk="low",
+            gate="current state must reflect request, proposal, and memory counts",
+            reason="Evolution needs a short self-readable state file between full memory scans.",
+        )
+
+    if open_requests:
+        signals.append(f"{len(open_requests)} open requests are not promoted")
+        add(
+            title="Auto-promote open operator requests at the start of work and discover",
+            target="evolution.py",
+            risk="medium",
+            gate="python evolution.py promote must remain idempotent",
+            reason="Open requests should enter proposal review before discovery ranks the project state.",
+        )
+
+    if not created:
+        signals.append("No new structural gaps found")
+
+    if created:
+        save_proposals(proposals + created)
+
+    event = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "action": "discover",
+        "signals": signals,
+        "created": created,
+        "observation": observations,
+    }
+    append_discovery(event)
+    append_memory(event)
+    return event
+
+
 def append_current_state() -> Path:
     memory_events = read_jsonl(MEMORY_LOG)
     proposals = read_proposals()
@@ -333,6 +487,100 @@ def append_current_state() -> Path:
     return path
 
 
+def ensure_approval_ledger() -> Path:
+    path = ROOT / "approvals" / "evolution_approvals.jsonl"
+    path.parent.mkdir(exist_ok=True)
+    if not path.exists():
+        path.write_text("", encoding="utf-8")
+    return path
+
+
+def write_language_checklist() -> Path:
+    path = ROOT / "LANGUAGE_CHANGE_CHECKLIST.md"
+    path.write_text(
+        "\n".join(
+            [
+                "# Language Change Checklist",
+                "",
+                "Use this before editing protected language/runtime files.",
+                "",
+                "- Proposal id is linked to a request or discovery.",
+                "- Protected-file approval is recorded in approvals/evolution_approvals.jsonl.",
+                "- Parser/interpreter tests are added or updated.",
+                "- At least one executable .nv example demonstrates the behavior.",
+                "- Migration notes describe old syntax, new syntax, and compatibility.",
+                "- Rollback notes explain how to revert safely.",
+                "- python evolution.py verify passes before commit.",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
+def write_cli_reference() -> Path:
+    path = ROOT / "CLI_REFERENCE.md"
+    commands = [
+        ("status", "Show manifest, observation, requests, and proposals."),
+        ("status-json", "Emit machine-readable status for dashboards."),
+        ("observe", "Inspect local project shape."),
+        ("ask \"request\"", "Append a human operator request."),
+        ("requests", "List operator requests."),
+        ("promote", "Convert open requests into proposals."),
+        ("discover", "Create proposals from project state signals."),
+        ("proposals", "List proposal ledger."),
+        ("work", "Work the next safe proposal."),
+        ("work --allow-protected", "Permit approved protected-target work."),
+        ("verify", "Run all verification gates."),
+        ("cycle", "Promote, observe, verify, and write memory."),
+    ]
+    lines = ["# Evolution CLI Reference", ""]
+    for command, description in commands:
+        lines.extend([f"## `{command}`", "", description, "", f"```powershell\npython evolution.py {command}\n```", ""])
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
+def write_changelog() -> Path:
+    path = ROOT / "CHANGELOG.md"
+    proposals = read_proposals()
+    lines = ["# Changelog", "", "## Completed Proposals", ""]
+    for proposal in proposals:
+        if proposal.get("status") == "done":
+            lines.append(
+                f"- {proposal.get('id')}: {proposal.get('title')} "
+                f"({proposal.get('target')})"
+            )
+    lines.append("")
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
+def write_discovery_examples() -> list[Path]:
+    examples = {
+        "examples/branching_plan.nv": [
+            "# Branching plan example.",
+            "let condition = True",
+            "if condition {",
+            '    print("branch-ready")',
+            "}",
+        ],
+        "examples/migration_plan.nv": [
+            "# Migration plan example.",
+            'let feature = "return-values"',
+            'let phase = "draft"',
+            'print("migration:" + feature + ":" + phase)',
+        ],
+    }
+    written: list[Path] = []
+    for rel, lines in examples.items():
+        path = ROOT / rel
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        written.append(path)
+    return written
+
+
 def can_satisfy_existing_artifact(proposal: dict[str, Any]) -> tuple[bool, str]:
     title = proposal.get("title", "").lower()
     target = proposal.get("target", "")
@@ -344,6 +592,21 @@ def can_satisfy_existing_artifact(proposal: dict[str, Any]) -> tuple[bool, str]:
         return True, "promote command exists and proposals were generated"
     if target == "evolution.py" and "status-json" in command_choices():
         return True, "status-json command exists"
+    if target == "approvals/evolution_approvals.jsonl":
+        path = ensure_approval_ledger()
+        return True, f"created {path.relative_to(ROOT)}"
+    if target == "LANGUAGE_CHANGE_CHECKLIST.md":
+        path = write_language_checklist()
+        return True, f"created {path.name}"
+    if target == "CLI_REFERENCE.md":
+        path = write_cli_reference()
+        return True, f"created {path.name}"
+    if target == "CHANGELOG.md":
+        path = write_changelog()
+        return True, f"created {path.name}"
+    if target == "examples/" and "return values" in title:
+        paths = write_discovery_examples()
+        return True, "created " + ", ".join(path.name for path in paths)
     return False, ""
 
 
@@ -359,6 +622,7 @@ def command_choices() -> set[str]:
         "cycle",
         "ask",
         "requests",
+        "discover",
         "work",
         "work-next",
     }
@@ -480,6 +744,7 @@ def main() -> int:
             "cycle",
             "ask",
             "requests",
+            "discover",
             "work",
             "work-next",
         ],
@@ -513,6 +778,9 @@ def main() -> int:
         return 0
     if args.command == "promote":
         print_json(promote_requests())
+        return 0
+    if args.command == "discover":
+        print_json(discover_candidates())
         return 0
     if args.command == "proposals":
         print_json(read_proposals())

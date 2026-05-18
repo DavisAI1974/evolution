@@ -1,0 +1,4 @@
+# Migration plan example.
+let feature = "return-values"
+let phase = "draft"
+print("migration:" + feature + ":" + phase)

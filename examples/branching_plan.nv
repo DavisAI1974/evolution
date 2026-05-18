@@ -1,0 +1,5 @@
+# Branching plan example.
+let condition = True
+if condition {
+    print("branch-ready")
+}

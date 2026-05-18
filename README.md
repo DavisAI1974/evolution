@@ -16,6 +16,7 @@ python evolution.py status
 python evolution.py ask "Add return values to Nova functions"
 python evolution.py requests
 python evolution.py promote
+python evolution.py discover
 python evolution.py proposals
 python evolution.py work
 python evolution.py cycle
@@ -43,6 +44,13 @@ python -m unittest discover -s tests
 Use `python evolution.py work` to let Evolution pick the next actionable proposal.
 Protected files such as `nova_interpreter.py` are marked `needs_approval` unless
 you deliberately rerun with `--allow-protected`.
+
+## Discovery Brain
+
+Use `python evolution.py discover` to let Evolution inspect its own state and
+create new proposals without a human request. The first discovery brain looks
+for approval bottlenecks, thin example coverage, missing command documentation,
+missing changelog, stale memory summaries, and unpromoted requests.
 - `project.evolution.json`: project identity, gates, and promotion policy.
 
 ## Current Evolution Loop

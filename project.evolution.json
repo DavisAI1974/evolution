@@ -16,6 +16,8 @@
       "python nova_interpreter.py homelift_nova_example.nv",
       "python nova_interpreter.py examples/evolution_loop.nv",
       "python nova_interpreter.py examples/functions.nv",
+      "python nova_interpreter.py examples/branching_plan.nv",
+      "python nova_interpreter.py examples/migration_plan.nv",
       "python -m unittest discover -s tests",
       "python nova_token_optimizer.py"
     ]
