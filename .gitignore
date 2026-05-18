@@ -1,0 +1,13 @@
+# Backup files
+*.backup
+*.bak
+*~
+
+# Python
+__pycache__/
+*.pyc
+.env
+
+# IDE
+.vscode/
+.idea/

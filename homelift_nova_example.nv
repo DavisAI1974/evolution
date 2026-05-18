@@ -1,0 +1,36 @@
+# HomeLift Lead Generation Example (Nova)
+# Shows how to use Nova for token-efficient operations
+
+# Configuration
+let zip_code = "43215"
+let tier = "Diamond"
+let target_leads = 45
+
+print("HomeLift Lead Generator")
+print("ZIP: " + zip_code)
+print("Tier: " + tier)
+
+# Simulate lead sources
+let sources = ["pre_intent", "fsbo", "social", "expired", "referral"]
+
+for source in sources {
+    print("Checking " + source + " leads...")
+}
+
+# Calculate allocation
+let diamond_percent = 0.40
+let platinum_percent = 0.60
+let diamond_leads = int(float(target_leads) * diamond_percent)
+let platinum_leads = target_leads - diamond_leads
+
+print("Diamond agents: " + str(diamond_leads) + " leads")
+print("Platinum agents: " + str(platinum_leads) + " leads")
+
+# Simulate scoring
+let desirability = 87.5
+let timeline = "18_months"
+
+print("Desirability score: " + str(desirability))
+print("Timeline: " + timeline)
+
+print("Lead generation complete!")

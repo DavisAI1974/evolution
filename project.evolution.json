@@ -1,0 +1,22 @@
+{
+  "name": "evolution",
+  "language": "nova",
+  "root": "E:\\evolution",
+  "mission": "Build a self-evolving codebase and AI-first language with explicit verification gates.",
+  "loop": ["observe", "propose", "verify", "govern", "learn"],
+  "gates": {
+    "shadow_mode_default": true,
+    "human_approval_required": true,
+    "max_auto_patch_files": 1,
+    "allowed_auto_targets": ["docs", "examples", "tests"],
+    "blocked_auto_targets": ["nova_interpreter.py", "evolution.py"]
+  },
+  "verification": {
+    "commands": [
+      "python nova_interpreter.py homelift_nova_example.nv",
+      "python nova_interpreter.py examples/evolution_loop.nv",
+      "python -m unittest discover -s tests",
+      "python nova_token_optimizer.py"
+    ]
+  }
+}

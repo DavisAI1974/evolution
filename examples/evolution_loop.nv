@@ -1,0 +1,23 @@
+# Evolution loop written in Nova.
+# This is executable documentation for the language's first self-evolution rule.
+
+let project = "evolution"
+let stages = ["observe", "propose", "verify", "govern", "learn"]
+let approval_required = True
+let shadow_mode = True
+
+print("Project: " + project)
+
+for stage in stages {
+    print("stage: " + stage)
+}
+
+if approval_required {
+    print("gate: human approval required")
+}
+
+if shadow_mode {
+    print("mode: shadow branch first")
+}
+
+print("rule: no syntax change without parser tests")
